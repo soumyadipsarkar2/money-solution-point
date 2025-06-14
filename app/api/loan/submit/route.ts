@@ -181,22 +181,28 @@ async function compressFile(file: File): Promise<Buffer> {
     
     // Only compress images
     if (file.type.startsWith('image/')) {
-      const compressed = await sharp(buffer)
-        .resize(1920, 1920, { // Max dimensions
-          fit: 'inside',
-          withoutEnlargement: true
-        })
-        .jpeg({ quality: 80 }) // Adjust quality
-        .toBuffer();
-      
-      logPerformance(`Compress image: ${file.name}`, startTime);
-      return compressed;
+      try {
+        const compressed = await sharp(buffer)
+          .resize(1920, 1920, { // Max dimensions
+            fit: 'inside',
+            withoutEnlargement: true
+          })
+          .jpeg({ quality: 80 }) // Adjust quality
+          .toBuffer();
+        
+        logPerformance(`Compress image: ${file.name}`, startTime);
+        return compressed;
+      } catch (sharpError) {
+        console.warn(`⚠️ Could not compress image ${file.name}, using original:`, sharpError);
+        return buffer; // Return original buffer if compression fails
+      }
     }
     
+    // For non-image files, return the original buffer
     return buffer;
   } catch (error) {
-    console.error('❌ Error compressing file:', error);
-    return Buffer.from(await file.arrayBuffer());
+    console.error('❌ Error processing file:', error);
+    throw new Error(`Failed to process file ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

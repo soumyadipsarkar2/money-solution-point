@@ -13,8 +13,9 @@ export default function HeroSection() {
   useEffect(() => {
     if (videoRef.current) {
       // Set video properties for autoplay
-      videoRef.current.muted = false
+      videoRef.current.muted = true // Must be muted for autoplay to work in most browsers
       videoRef.current.playsInline = true
+      videoRef.current.loop = true
 
       // Attempt to play the video
       const playPromise = videoRef.current.play()
@@ -137,6 +138,7 @@ export default function HeroSection() {
                 autoPlay
                 loop
                 playsInline
+                muted
                 preload="auto"
               >
                 <source src="/hero-video.mp4" type="video/mp4" />
