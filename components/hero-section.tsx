@@ -8,12 +8,13 @@ import AnimatedCounter from "@/components/animated-counter"
 
 export default function HeroSection() {
   const [isPlaying, setIsPlaying] = useState(true)
+  const [isMuted, setIsMuted] = useState(true)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (videoRef.current) {
       // Set video properties for autoplay
-      videoRef.current.muted = true // Must be muted for autoplay to work in most browsers
+      videoRef.current.muted = true // Must be muted initially for autoplay to work
       videoRef.current.playsInline = true
       videoRef.current.loop = true
 
@@ -44,6 +45,13 @@ export default function HeroSection() {
         videoRef.current.play()
         setIsPlaying(true)
       }
+    }
+  }
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted
+      setIsMuted(!isMuted)
     }
   }
 
@@ -145,16 +153,38 @@ export default function HeroSection() {
                 Your browser does not support the video tag.
               </video>
 
-              {/* Transparent Play/Pause Button */}
+              {/* Controls Overlay */}
               <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-auto h-auto p-4 bg-transparent hover:bg-black/20 text-white border-0 shadow-none transition-all duration-300 hover:scale-110 pointer-events-auto"
-                  onClick={togglePlay}
-                >
-                  {isPlaying ? <Pause className="h-12 w-12" /> : <Play className="h-12 w-12 ml-1" />}
-                </Button>
+                <div className="flex gap-4 pointer-events-auto">
+                  {/* Play/Pause Button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-auto h-auto p-4 bg-transparent hover:bg-black/20 text-white border-0 shadow-none transition-all duration-300 hover:scale-110"
+                    onClick={togglePlay}
+                  >
+                    {isPlaying ? <Pause className="h-12 w-12" /> : <Play className="h-12 w-12 ml-1" />}
+                  </Button>
+
+                  {/* Mute/Unmute Button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-auto h-auto p-4 bg-transparent hover:bg-black/20 text-white border-0 shadow-none transition-all duration-300 hover:scale-110"
+                    onClick={toggleMute}
+                  >
+                    {isMuted ? (
+                      <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                      </svg>
+                    ) : (
+                      <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                      </svg>
+                    )}
+                  </Button>
+                </div>
               </div>
 
               {/* Video Overlay for Better Button Visibility */}
