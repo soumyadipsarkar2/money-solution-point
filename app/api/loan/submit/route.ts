@@ -138,7 +138,7 @@ async function appendToSheet(values: any[]) {
   try {
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet1!A:Z',
+      range: 'Loan Application!A:Z',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [values],
@@ -181,28 +181,22 @@ async function compressFile(file: File): Promise<Buffer> {
     
     // Only compress images
     if (file.type.startsWith('image/')) {
-      try {
-        const compressed = await sharp(buffer)
-          .resize(1920, 1920, { // Max dimensions
-            fit: 'inside',
-            withoutEnlargement: true
-          })
-          .jpeg({ quality: 80 }) // Adjust quality
-          .toBuffer();
-        
-        logPerformance(`Compress image: ${file.name}`, startTime);
-        return compressed;
-      } catch (sharpError) {
-        console.warn(`⚠️ Could not compress image ${file.name}, using original:`, sharpError);
-        return buffer; // Return original buffer if compression fails
-      }
+      const compressed = await sharp(buffer)
+        .resize(1920, 1920, { // Max dimensions
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({ quality: 80 }) // Adjust quality
+        .toBuffer();
+      
+      logPerformance(`Compress image: ${file.name}`, startTime);
+      return compressed;
     }
     
-    // For non-image files, return the original buffer
     return buffer;
   } catch (error) {
-    console.error('❌ Error processing file:', error);
-    throw new Error(`Failed to process file ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('❌ Error compressing file:', error);
+    return Buffer.from(await file.arrayBuffer());
   }
 }
 
@@ -252,11 +246,12 @@ async function uploadFileWithRetry(file: any, folderId: string, fileName: string
       parents: [folderId],
     };
 
-    const compressedBuffer = await compressFile(file);
-    
+    // const compressedBuffer = await compressFile(file);
+    const buffer = Buffer.from(await file.arrayBuffer());
+
     const media = {
       mimeType: file.type,
-      body: Readable.from(compressedBuffer),
+      body: Readable.from(buffer),
     };
 
     const response = await drive.files.create({

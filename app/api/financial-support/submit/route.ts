@@ -27,7 +27,7 @@ async function appendToSheet(values: any[]) {
   try {
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet2!A:Z',
+      range: 'Loan Enquiry!A:Z',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [values],
