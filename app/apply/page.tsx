@@ -73,7 +73,7 @@ const documentTypes: DocumentType[] = [
   { id: "photos", label: "Photographs (4)", hindiLabel: "फोटोग्राफ (4)", required: false },
   { id: "bank_statement", label: "Bank Statement (1 Year)", hindiLabel: "बैंक स्टेटमेंट (1 वर्ष)", required: false },
   { id: "itr", label: "Income Tax Returns (3 Years)", hindiLabel: "आयकर रिटर्न (3 वर्ष)", required: false },
-  { id: "gst", label: "GST Returns (if applicable)", hindiLabel: "जीएसटी रिटर्न (यदि लागू हो)", required: true },
+  { id: "gst", label: "GST Returns (if applicable)", hindiLabel: "जीएसटी रिटर्न (यदि लागू हो)", required: false },
   { id: "property_docs", label: "Property Documents", hindiLabel: "संपत्ति दस्तावेज", required: false },
   { id: "loan_history", label: "Loan History (1 Year)", hindiLabel: "ऋण इतिहास (1 वर्ष)", required: false },
   { id: "property_photos_and_videos", label: "Property Photos and Videos", hindiLabel: "संपत्ति फोटो/वीडियो", required: false },
