@@ -840,7 +840,7 @@ export default function ApplyPage() {
                             onValueChange={(value) => handleSelectChange("loanType", value)}
                             defaultValue=""
                           >
-                            <SelectTrigger className={fieldErrors.loanType ? 'border-red-500' : ''}>
+                            <SelectTrigger id="loanType" className={fieldErrors.loanType ? 'border-red-500' : ''}>
                               <SelectValue placeholder="Select loan type" />
                             </SelectTrigger>
                             <SelectContent>

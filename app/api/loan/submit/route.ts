@@ -477,29 +477,47 @@ export async function POST(request: Request) {
     await appendToSheet(sheetData);
     uploadProgress.steps[3].status = 'completed';
 
-    // After successful submission and before returning response
-    await sendLoanApplicationEmail({
-      name: applicantName,
-      email: applicantEmail,
-      phone: applicantPhone,
-      location: applicantLocation,
-      loanAmount,
-      loanType,
-      message: formData.get('message') as string,
-      googleDriveLink: folderData.data.webViewLink,
-      applicationId: applicationNumber,
-    });
+    // Update progress to show email sending
+    uploadProgress.status = 'processing';
+    uploadProgress.currentStep = 'Sending Confirmation Email';
+    uploadProgress.currentFile = '';
 
-    uploadProgress.status = 'completed';
-    uploadProgress.percentage = 100;
-    logPerformance('Total request processing time', totalStartTime);
+    try {
+      // After successful submission and before returning response
+      await sendLoanApplicationEmail({
+        name: applicantName,
+        email: applicantEmail,
+        phone: applicantPhone,
+        location: applicantLocation,
+        loanAmount,
+        loanType,
+        message: formData.get('message') as string,
+        googleDriveLink: folderData.data.webViewLink,
+        applicationId: applicationNumber,
+      });
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Loan application submitted successfully',
-      applicationNumber,
-      applicantFolderId
-    });
+      uploadProgress.status = 'completed';
+      uploadProgress.percentage = 100;
+      logPerformance('Total request processing time', totalStartTime);
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Loan application submitted successfully',
+        applicationNumber,
+        applicantFolderId
+      });
+    } catch (error) {
+      console.error('Error sending email:', error);
+      // Even if email fails, we still want to return success since the application was submitted
+      uploadProgress.status = 'completed';
+      uploadProgress.percentage = 100;
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Loan application submitted successfully (Email notification failed)',
+        applicationNumber,
+        applicantFolderId
+      });
+    }
 
   } catch (error) {
     console.error('Error in loan submission:', error);

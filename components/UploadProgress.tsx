@@ -22,13 +22,33 @@ interface UploadProgress {
   }[];
 }
 
+interface InitialUploadProgress {
+  currentFile: string;
+  status: 'uploading' | 'completed' | 'error';
+}
+
 export default function UploadProgress() {
   const [progress, setProgress] = useState<UploadProgress | null>(null);
+  const [initialProgress, setInitialProgress] = useState<InitialUploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialUpload, setIsInitialUpload] = useState(true);
 
   useEffect(() => {
     const pollProgress = async () => {
       try {
+        // First check initial upload progress
+        const initialResponse = await fetch('/api/upload');
+        if (initialResponse.ok) {
+          const initialData = await initialResponse.json();
+          setInitialProgress(initialData);
+          
+          // If initial upload is completed, switch to loan submit progress
+          if (initialData.status === 'completed') {
+            setIsInitialUpload(false);
+          }
+        }
+
+        // Then check loan submit progress
         const response = await fetch('/api/loan/submit');
         if (!response.ok) throw new Error('Failed to fetch progress');
         const data = await response.json();
@@ -47,6 +67,27 @@ export default function UploadProgress() {
     pollProgress();
   }, []);
 
+  if (!progress && !initialProgress) return null;
+
+  // Show initial upload progress
+  if (isInitialUpload && initialProgress) {
+    return (
+      <div className="fixed bottom-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-md w-full z-50">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold">Uploading Document</h3>
+          <span className="text-sm text-blue-500">Uploading...</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+          <p className="text-sm text-gray-600 truncate">
+            {initialProgress.currentFile}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loan submit progress
   if (!progress) return null;
 
   const getStepIcon = (status: 'pending' | 'in-progress' | 'completed' | 'error') => {

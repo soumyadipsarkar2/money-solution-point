@@ -1,7 +1,9 @@
 import { Resend } from 'resend';
 import { EmailTemplate } from './email-template';
+import { ReactElement } from 'react';
 
-const resend = new Resend('re_hnqhL722_53Dfar9si5vX3AvYvecZCcNa');
+// Initialize Resend with environment variable
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendLoanApplicationEmail({
   name,
@@ -25,10 +27,17 @@ export async function sendLoanApplicationEmail({
   applicationId: string;
 }) {
   try {
-    // Send to applicant
-    await resend.emails.send({
-      from: 'Money Solution Point <noreply@moneysolutionpoint.com>',
-      to: email,
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY is not configured');
+    }
+
+    console.log('Sending email to:', email);
+    console.log('Application ID:', applicationId);
+
+    // Send to applicant (using verified email for testing)
+    const result = await resend.emails.send({
+      from: 'Money Solution Point <onboarding@resend.dev>',
+      to: 'somshich@gmail.com', // Using verified email for testing
       subject: `Loan Application Submitted - ${applicationId}`,
       react: EmailTemplate({
         name,
@@ -40,30 +49,32 @@ export async function sendLoanApplicationEmail({
         message,
         googleDriveLink,
         applicationId,
-      }),
+      }) as ReactElement,
     });
 
-    // Send to company
-    await resend.emails.send({
-      from: 'Money Solution Point <noreply@moneysolutionpoint.com>',
-      to: 'moneysolutionpoint2004@gmail.com',
-      subject: `New Loan Application - ${applicationId}`,
-      react: EmailTemplate({
-        name,
-        email,
-        phone,
-        location,
-        loanAmount,
-        loanType,
-        message,
-        googleDriveLink,
-        applicationId,
-      }),
-    });
+    console.log('Email sent successfully:', result);
+
+    // Send to company (using verified email for testing)
+    // await resend.emails.send({
+    //   from: 'Money Solution Point <onboarding@resend.dev>',
+    //   to: 'somshich@gmail.com', // Using verified email for testing
+    //   subject: `New Loan Application - ${applicationId}`,
+    //   react: EmailTemplate({
+    //     name,
+    //     email,
+    //     phone,
+    //     location,
+    //     loanAmount,
+    //     loanType,
+    //     message,
+    //     googleDriveLink,
+    //     applicationId,
+    //   }) as ReactElement,
+    // });
 
     return { success: true };
   } catch (error) {
     console.error('Failed to send email:', error);
-    return { success: false, error };
+    throw error; // Re-throw the error to be handled by the caller
   }
 } 

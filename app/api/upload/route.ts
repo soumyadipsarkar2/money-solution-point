@@ -18,6 +18,16 @@ const drive = google.drive({ version: 'v3', auth });
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
+// Progress tracking
+let uploadProgress = {
+  currentFile: '',
+  status: 'uploading' as 'uploading' | 'completed' | 'error'
+};
+
+export async function GET() {
+  return NextResponse.json(uploadProgress);
+}
+
 export async function POST(request: Request) {
   try {
     if (!DRIVE_FOLDER_ID) {
@@ -32,6 +42,10 @@ export async function POST(request: Request) {
     if (!file || !fileName || !docType) {
       throw new Error('Missing required fields');
     }
+
+    // Update progress
+    uploadProgress.currentFile = fileName;
+    uploadProgress.status = 'uploading';
 
     // Convert File to Buffer
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -57,6 +71,9 @@ export async function POST(request: Request) {
       throw new Error('Failed to get file link');
     }
 
+    // Update progress
+    uploadProgress.status = 'completed';
+
     return NextResponse.json({
       success: true,
       fileId: response.data.id,
@@ -65,6 +82,7 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('Error uploading file:', error);
+    uploadProgress.status = 'error';
     return NextResponse.json(
       { success: false, message: 'Failed to upload file' },
       { status: 500 }
