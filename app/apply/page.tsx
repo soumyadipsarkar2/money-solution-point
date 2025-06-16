@@ -62,30 +62,130 @@ const loanTypes = [
 
 interface DocumentType {
   id: string;
+  key: string;
   label: string;
-  hindiLabel: string;
-  required: boolean;
+  hindiLabel?: string;
+  required?: boolean;
+  name: string;
 }
 
 const documentTypes: DocumentType[] = [
-  { id: "pan", label: "PAN Card", hindiLabel: "पैन कार्ड", required: true },
-  { id: "aadhaar", label: "Aadhaar Card", hindiLabel: "आधार कार्ड", required: true },
-  { id: "photos", label: "Photographs (4)", hindiLabel: "फोटोग्राफ (4)", required: false },
-  { id: "bank_statement", label: "Bank Statement (1 Year)", hindiLabel: "बैंक स्टेटमेंट (1 वर्ष)", required: false },
-  { id: "itr", label: "Income Tax Returns (3 Years)", hindiLabel: "आयकर रिटर्न (3 वर्ष)", required: false },
-  { id: "gst", label: "GST Returns (if applicable)", hindiLabel: "जीएसटी रिटर्न (यदि लागू हो)", required: false },
-  { id: "property_docs", label: "Property Documents", hindiLabel: "संपत्ति दस्तावेज", required: false },
-  { id: "loan_history", label: "Loan History (1 Year)", hindiLabel: "ऋण इतिहास (1 वर्ष)", required: false },
-  { id: "property_photos_and_videos", label: "Property Photos and Videos", hindiLabel: "संपत्ति फोटो/वीडियो", required: false },
-  { id: "other", label: "Other Documents", hindiLabel: "अन्य दस्तावेज", required: false },
-]
+  {
+    id: "pan",
+    key: "pan",
+    label: "PAN Card",
+    hindiLabel: "पैन कार्ड",
+    required: true,
+    name: "PAN Card"
+  },
+  {
+    id: "aadhaar",
+    key: "aadhaar",
+    label: "Aadhaar Card",
+    hindiLabel: "आधार कार्ड",
+    required: true,
+    name: "Aadhaar Card"
+  },
+  {
+    id: "photos",
+    key: "photos",
+    label: "Photographs",
+    hindiLabel: "फोटो",
+    required: false,
+    name: "Photographs"
+  },
+  {
+    id: "bank_statement",
+    key: "bank_statement",
+    label: "Bank Statement",
+    hindiLabel: "बैंक स्टेटमेंट",
+    required: false,
+    name: "Bank Statement"
+  },
+  {
+    id: "itr",
+    key: "itr",
+    label: "ITR",
+    hindiLabel: "आईटीआर",
+    required: false,
+    name: "ITR"
+  },
+  {
+    id: "gst",
+    key: "gst",
+    label: "GST Returns",
+    hindiLabel: "जीएसटी रिटर्न",
+    required: false,
+    name: "GST Returns"
+  },
+  {
+    id: "loan_history",
+    key: "loan_history",
+    label: "Loan History",
+    hindiLabel: "लोन इतिहास",
+    required: false,
+    name: "Loan History"
+  },
+  {
+    id: "property_docs",
+    key: "property_docs",
+    label: "Property Documents",
+    hindiLabel: "संपत्ति दस्तावेज",
+    required: false,
+    name: "Property Documents"
+  },
+  {
+    id: "property_photos_and_videos",
+    key: "property_photos_and_videos",
+    label: "Property Photos and Videos",
+    hindiLabel: "संपत्ति फोटो और वीडियो",
+    required: false,
+    name: "Property Photos and Videos"
+  },
+  {
+    id: "other",
+    key: "other",
+    label: "Other Documents",
+    hindiLabel: "अन्य दस्तावेज",
+    required: false,
+    name: "Other Documents"
+  }
+];
 
 const coApplicantDocTypes: DocumentType[] = [
-  { id: "co_pan", label: "PAN Card", hindiLabel: "पैन कार्ड", required: true },
-  { id: "co_aadhaar", label: "Aadhar Card", hindiLabel: "आधार कार्ड", required: false },
-  { id: "co_photos", label: "Photographs (4)", hindiLabel: "फोटोग्राफ (4)", required: false },
-  { id: "co_income", label: "Income Proof", hindiLabel: "आय प्रमाण", required: false },
-]
+  {
+    id: "co_pan",
+    key: "co_pan",
+    label: "PAN Card",
+    hindiLabel: "पैन कार्ड",
+    required: true,
+    name: "PAN Card"
+  },
+  {
+    id: "co_aadhaar",
+    key: "co_aadhaar",
+    label: "Aadhaar Card",
+    hindiLabel: "आधार कार्ड",
+    required: true,
+    name: "Aadhaar Card"
+  },
+  {
+    id: "co_photos",
+    key: "co_photos",
+    label: "Photographs",
+    hindiLabel: "फोटो",
+    required: false,
+    name: "Photographs"
+  },
+  {
+    id: "co_income",
+    key: "co_income",
+    label: "Income Proof",
+    hindiLabel: "आय प्रमाण",
+    required: false,
+    name: "Income Proof"
+  }
+];
 
 interface FormData {
   name: string;
@@ -155,13 +255,58 @@ export default function ApplyPage() {
   }
 
   const handleFileChange = (id: string, files: File[], isCoApplicant = false) => {
-    // Only update state
+    // Only update state without uploading
     if (isCoApplicant) {
       setCoApplicantDocuments((prev) => ({ ...prev, [id]: files }));
     } else {
       setDocuments((prev) => ({ ...prev, [id]: files }));
     }
-  };  
+  };
+
+  const uploadFilesToGoogleDrive = async (files: Record<string, File[]>, isCoApplicant = false) => {
+    const uploadedFiles: Record<string, { name: string; webViewLink: string }[]> = {};
+    
+    for (const [docId, fileList] of Object.entries(files)) {
+      if (fileList.length === 0) continue;
+      
+      const doc = isCoApplicant 
+        ? coApplicantDocTypes.find(d => d.id === docId)
+        : documentTypes.find(d => d.id === docId);
+        
+      if (!doc) continue;
+      
+      uploadedFiles[docId] = [];
+      
+      for (const file of fileList) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('fileName', `${doc.name}-${file.name}`);
+          formData.append('docType', docId);
+          
+          const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Failed to upload ${file.name}`);
+          }
+          
+          const data = await response.json();
+          uploadedFiles[docId].push({
+            name: file.name,
+            webViewLink: data.webViewLink
+          });
+        } catch (error) {
+          console.error(`Error uploading ${file.name}:`, error);
+          throw error;
+        }
+      }
+    }
+    
+    return uploadedFiles;
+  };
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -416,6 +561,10 @@ export default function ApplyPage() {
     setShowProgress(true)
 
     try {
+      // First upload all files and get their metadata
+      const applicantFileMetadata = await uploadFilesToGoogleDrive(documents)
+      const coApplicantFileMetadata = await uploadFilesToGoogleDrive(coApplicantDocuments, true)
+      
       const formDataToSubmit = new FormData()
       
       // Append form data
@@ -425,19 +574,9 @@ export default function ApplyPage() {
         }
       })
 
-      // Append documents
-      Object.entries(documents).forEach(([key, files]) => {
-        files.forEach(file => {
-          formDataToSubmit.append(key, file)
-        })
-      })
-
-      // Append co-applicant documents
-      Object.entries(coApplicantDocuments).forEach(([key, files]) => {
-        files.forEach(file => {
-          formDataToSubmit.append(key, file)
-        })
-      })
+      // Append file metadata
+      formDataToSubmit.append('applicantFileMetadata', JSON.stringify(applicantFileMetadata))
+      formDataToSubmit.append('coApplicantFileMetadata', JSON.stringify(coApplicantFileMetadata))
 
       const response = await fetch('/api/loan/submit', {
         method: 'POST',
