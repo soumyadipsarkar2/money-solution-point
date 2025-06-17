@@ -379,6 +379,29 @@ async function processGoogleDriveUpload(data: {
       throw new Error('Failed to create main folder');
     }
 
+    // Get the main folder link immediately after creation
+    const folderData = await drive.files.get({
+      fileId: mainFolderId,
+      fields: 'webViewLink',
+    });
+
+    if (!folderData.data?.webViewLink) {
+      throw new Error('Failed to get folder link');
+    }
+
+    // Send email immediately after folder creation
+    await sendLoanApplicationEmail({
+      name: data.applicantName,
+      email: data.applicantEmail,
+      phone: data.applicantPhone,
+      location: data.applicantLocation,
+      loanAmount: data.loanAmount,
+      loanType: data.loanType,
+      message: '',
+      googleDriveLink: folderData.data.webViewLink,
+      applicationId: data.applicationNumber,
+    });
+
     // Create Applicant Details and Co-Applicant Details folders
     const applicantFolderId = await createFolder('Applicant Details', mainFolderId);
     if (!applicantFolderId) {
@@ -428,16 +451,6 @@ async function processGoogleDriveUpload(data: {
           await moveFileToFolder(file.webViewLink, file.name, coApplicantFolderId);
         }
       }
-    }
-
-    // Get the main folder link
-    const folderData = await drive.files.get({
-      fileId: mainFolderId,
-      fields: 'webViewLink',
-    });
-
-    if (!folderData.data?.webViewLink) {
-      throw new Error('Failed to get folder link');
     }
 
     // Prepare data for Google Sheets
