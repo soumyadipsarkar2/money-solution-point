@@ -679,6 +679,24 @@ export default function ApplyPage() {
       formDataToSubmit.append('applicantFileMetadata', JSON.stringify(applicantFileMetadata))
       formDataToSubmit.append('coApplicantFileMetadata', JSON.stringify(coApplicantFileMetadata))
 
+      // Update progress to show Google Drive upload
+      setUploadProgress(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          currentStep: 'Uploading to Google Drive',
+          status: 'uploading',
+          steps: [
+            ...prev.steps,
+            {
+              name: 'Uploading to Google Drive',
+              status: 'in-progress',
+              files: []
+            }
+          ]
+        };
+      });
+
       const response = await fetch('/api/loan/submit', {
         method: 'POST',
         body: formDataToSubmit,
@@ -690,13 +708,46 @@ export default function ApplyPage() {
         throw new Error(data.message || 'Failed to submit application')
       }
 
-      // Redirect to success page
-      router.push(`/success?applicationNumber=${data.applicationNumber}`)
+      // Update progress to show Google Drive upload completed
+      setUploadProgress(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: 'completed',
+          percentage: 100,
+          steps: prev.steps.map(step => ({
+            ...step,
+            status: 'completed'
+          }))
+        };
+      });
 
-    } catch (error) {
-      console.error('Error submitting application:', error)
-      setError(error instanceof Error ? error.message : 'Failed to submit application')
+      // Only set success state after Google Drive upload is complete
+      setApplicationNumber(data.applicationNumber)
+      setIsSuccess(true)
       setShowProgress(false)
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to submit application'
+      setError(errorMessage)
+      setShowProgress(false)
+      setUploadProgress(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: 'error',
+          steps: prev.steps.map(step => ({
+            ...step,
+            status: 'error',
+            error: errorMessage
+          }))
+        };
+      });
+      toast({
+        title: "Submission Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setIsSubmitting(false)
     }

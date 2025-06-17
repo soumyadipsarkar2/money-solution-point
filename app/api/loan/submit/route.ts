@@ -317,8 +317,8 @@ export async function POST(request: Request) {
     // Generate application number
     const applicationNumber = `MSP-${Date.now().toString().slice(-8)}`;
 
-    // Start async Google Drive upload process
-    processGoogleDriveUpload({
+    // Wait for Google Drive upload to complete
+    await processGoogleDriveUpload({
       applicationNumber,
       applicantName,
       applicantEmail,
@@ -333,12 +333,9 @@ export async function POST(request: Request) {
       coApplicantIncome,
       applicantFileMetadata,
       coApplicantFileMetadata
-    }).catch(error => {
-      console.error('Error in async Google Drive upload:', error);
-      // Log the error but don't throw since this is async
     });
 
-    // Return success immediately
+    // Return success only after Google Drive upload is complete
     return NextResponse.json({ 
       success: true, 
       message: 'Loan application submitted successfully',
@@ -388,19 +385,6 @@ async function processGoogleDriveUpload(data: {
     if (!folderData.data?.webViewLink) {
       throw new Error('Failed to get folder link');
     }
-
-    // Send email immediately after folder creation
-    await sendLoanApplicationEmail({
-      name: data.applicantName,
-      email: data.applicantEmail,
-      phone: data.applicantPhone,
-      location: data.applicantLocation,
-      loanAmount: data.loanAmount,
-      loanType: data.loanType,
-      message: '',
-      googleDriveLink: folderData.data.webViewLink,
-      applicationId: data.applicationNumber,
-    });
 
     // Create Applicant Details and Co-Applicant Details folders
     const applicantFolderId = await createFolder('Applicant Details', mainFolderId);
@@ -473,6 +457,19 @@ async function processGoogleDriveUpload(data: {
 
     // Append to Google Sheets
     await appendToSheet(sheetData);
+
+    // Send email immediately after folder creation
+    await sendLoanApplicationEmail({
+      name: data.applicantName,
+      email: data.applicantEmail,
+      phone: data.applicantPhone,
+      location: data.applicantLocation,
+      loanAmount: data.loanAmount,
+      loanType: data.loanType,
+      message: '',
+      googleDriveLink: folderData.data.webViewLink,
+      applicationId: data.applicationNumber,
+    });
 
   } catch (error) {
     console.error('Error in async Google Drive upload process:', error);
