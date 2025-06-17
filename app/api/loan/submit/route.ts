@@ -15,7 +15,7 @@ interface UploadProgress {
   uploadedFiles: number;
   currentFile: string;
   currentStep: string;
-  status: 'preparing' | 'uploading' | 'processing' | 'completed' | 'error';
+  status: 'preparing' | 'uploading' | 'processing' | 'completed' | 'error' | 'downloading';
   percentage: number;
   steps: {
     name: string;
@@ -39,8 +39,7 @@ let uploadProgress: UploadProgress = {
   percentage: 0,
   steps: [
     { name: 'Creating Folders', status: 'pending', files: [] },
-    { name: 'Processing Applicant Documents', status: 'pending', files: [] },
-    { name: 'Processing Co-Applicant Documents', status: 'pending', files: [] },
+    { name: 'Processing Files', status: 'pending', files: [] },
     { name: 'Finalizing Application', status: 'pending', files: [] }
   ]
 };
@@ -291,22 +290,6 @@ export async function GET() {
 export async function POST(request: Request) {
   const totalStartTime = performance.now();
   try {
-    // Reset progress
-    uploadProgress = {
-      totalFiles: 0,
-      uploadedFiles: 0,
-      currentFile: '',
-      currentStep: '',
-      status: 'preparing',
-      percentage: 0,
-      steps: [
-        { name: 'Creating Folders', status: 'pending', files: [] },
-        { name: 'Processing Applicant Documents', status: 'pending', files: [] },
-        { name: 'Processing Co-Applicant Documents', status: 'pending', files: [] },
-        { name: 'Finalizing Application', status: 'pending', files: [] }
-      ]
-    };
-
     if (!DRIVE_FOLDER_ID) {
       throw new Error('DRIVE_FOLDER_ID is not configured');
     }
@@ -331,35 +314,79 @@ export async function POST(request: Request) {
     const applicantFileMetadata = JSON.parse(formData.get('applicantFileMetadata') as string) as FileMetadataRecord;
     const coApplicantFileMetadata = JSON.parse(formData.get('coApplicantFileMetadata') as string) as FileMetadataRecord;
 
-    // Count total files
-    const countFiles = (metadata: FileMetadataRecord) => {
-      return Object.values(metadata).reduce((count, files) => count + files.length, 0);
-    };
-
-    uploadProgress.totalFiles = countFiles(applicantFileMetadata) + 
-      (coApplicantName ? countFiles(coApplicantFileMetadata) : 0);
-
     // Generate application number
     const applicationNumber = `MSP-${Date.now().toString().slice(-8)}`;
-    
+
+    // Start async Google Drive upload process
+    processGoogleDriveUpload({
+      applicationNumber,
+      applicantName,
+      applicantEmail,
+      applicantPhone,
+      applicantLocation,
+      loanAmount,
+      loanType,
+      coApplicantName,
+      coApplicantEmail,
+      coApplicantPhone,
+      coApplicantLocation,
+      coApplicantIncome,
+      applicantFileMetadata,
+      coApplicantFileMetadata
+    }).catch(error => {
+      console.error('Error in async Google Drive upload:', error);
+      // Log the error but don't throw since this is async
+    });
+
+    // Return success immediately
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Loan application submitted successfully',
+      applicationNumber
+    });
+
+  } catch (error) {
+    console.error('Error processing loan application:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to process loan application' },
+      { status: 500 }
+    );
+  }
+}
+
+// Async function to handle Google Drive upload
+async function processGoogleDriveUpload(data: {
+  applicationNumber: string;
+  applicantName: string;
+  applicantEmail: string;
+  applicantPhone: string;
+  applicantLocation: string;
+  loanAmount: string;
+  loanType: string;
+  coApplicantName?: string;
+  coApplicantEmail?: string;
+  coApplicantPhone?: string;
+  coApplicantLocation?: string;
+  coApplicantIncome?: string;
+  applicantFileMetadata: FileMetadataRecord;
+  coApplicantFileMetadata: FileMetadataRecord;
+}) {
+  try {
     // Create applicant folder with application number
-    updateProgress('Main Folder', 'Creating Folders', 'preparing');
-    const folderName = `${applicantName} - ${applicationNumber}`;
+    const folderName = `${data.applicantName} - ${data.applicationNumber}`;
     const mainFolderId = await createFolder(folderName);
     if (!mainFolderId) {
       throw new Error('Failed to create main folder');
     }
 
     // Create Applicant Details and Co-Applicant Details folders
-    updateProgress('Applicant Folder', 'Creating Folders', 'preparing');
     const applicantFolderId = await createFolder('Applicant Details', mainFolderId);
     if (!applicantFolderId) {
       throw new Error('Failed to create applicant folder');
     }
 
     let coApplicantFolderId: string | undefined = undefined;
-    if (coApplicantName) {
-      updateProgress('Co-Applicant Folder', 'Creating Folders', 'preparing');
+    if (data.coApplicantName) {
       const coFolderId = await createFolder('Co-Applicant Details', mainFolderId);
       if (!coFolderId) {
         throw new Error('Failed to create co-applicant folder');
@@ -367,85 +394,43 @@ export async function POST(request: Request) {
       coApplicantFolderId = coFolderId;
     }
 
-    // Mark folder creation as completed
-    uploadProgress.steps[0].status = 'completed';
-
     // Process applicant documents
-    for (const [docId, files] of Object.entries(applicantFileMetadata)) {
+    for (const [docId, files] of Object.entries(data.applicantFileMetadata)) {
       const doc = applicantDocuments.find(d => d.key === docId);
       if (!doc) continue;
 
       if (files.length > 1 || doc.key === 'property_photos_and_videos') {
-        updateProgress(doc.name, 'Processing Applicant Documents', 'preparing');
         const subfolderId = await createFolder(doc.name, applicantFolderId);
         
         for (const file of files) {
-          try {
-            updateProgress(file.name, 'Processing Applicant Documents', 'uploading', doc.name);
-            await moveFileToFolder(file.webViewLink, subfolderId!);
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to move file';
-            updateProgress(file.name, 'Processing Applicant Documents', 'error', doc.name);
-            uploadProgress.steps[1].error = errorMessage;
-            throw new Error(`Failed to move ${file.name}: ${errorMessage}`);
-          }
+          await moveFileToFolder(file.webViewLink, file.name, subfolderId!);
         }
       } else {
-        try {
-          const file = files[0];
-          updateProgress(file.name, 'Processing Applicant Documents', 'uploading');
-          await moveFileToFolder(file.webViewLink, applicantFolderId);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to move file';
-          updateProgress(files[0].name, 'Processing Applicant Documents', 'error');
-          uploadProgress.steps[1].error = errorMessage;
-          throw new Error(`Failed to move ${files[0].name}: ${errorMessage}`);
-        }
+        const file = files[0];
+        await moveFileToFolder(file.webViewLink, file.name, applicantFolderId);
       }
     }
 
-    uploadProgress.steps[1].status = 'completed';
-
     // Process co-applicant documents
     if (coApplicantFolderId) {
-      for (const [docId, files] of Object.entries(coApplicantFileMetadata)) {
+      for (const [docId, files] of Object.entries(data.coApplicantFileMetadata)) {
         const doc = coApplicantDocuments.find(d => d.key === docId);
         if (!doc) continue;
 
         if (files.length > 1) {
-          updateProgress(doc.name, 'Processing Co-Applicant Documents', 'preparing');
           const subfolderId = await createFolder(doc.name, coApplicantFolderId);
           
           for (const file of files) {
-            try {
-              updateProgress(file.name, 'Processing Co-Applicant Documents', 'uploading', doc.name);
-              await moveFileToFolder(file.webViewLink, subfolderId!);
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : 'Failed to move file';
-              updateProgress(file.name, 'Processing Co-Applicant Documents', 'error', doc.name);
-              uploadProgress.steps[2].error = errorMessage;
-              throw new Error(`Failed to move ${file.name}: ${errorMessage}`);
-            }
+            await moveFileToFolder(file.webViewLink, file.name, subfolderId!);
           }
         } else {
-          try {
-            const file = files[0];
-            updateProgress(file.name, 'Processing Co-Applicant Documents', 'uploading');
-            await moveFileToFolder(file.webViewLink, coApplicantFolderId);
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to move file';
-            updateProgress(files[0].name, 'Processing Co-Applicant Documents', 'error');
-            uploadProgress.steps[2].error = errorMessage;
-            throw new Error(`Failed to move ${files[0].name}: ${errorMessage}`);
-          }
+          const file = files[0];
+          await moveFileToFolder(file.webViewLink, file.name, coApplicantFolderId);
         }
       }
-
-      uploadProgress.steps[2].status = 'completed';
     }
 
     // Get the main folder link
-    updateProgress('Finalizing', 'Finalizing Application', 'processing');
     const folderData = await drive.files.get({
       fileId: mainFolderId,
       fields: 'webViewLink',
@@ -458,98 +443,73 @@ export async function POST(request: Request) {
     // Prepare data for Google Sheets
     const sheetData = [
       new Date().toISOString(),
-      applicantName,
-      applicantEmail,
-      applicantPhone,
-      applicantLocation,
-      loanAmount,
-      loanType,
+      data.applicantName,
+      data.applicantEmail,
+      data.applicantPhone,
+      data.applicantLocation,
+      data.loanAmount,
+      data.loanType,
       folderData.data.webViewLink,
-      coApplicantName,
-      coApplicantEmail,
-      coApplicantPhone,
-      coApplicantLocation,
-      coApplicantIncome,
+      data.coApplicantName,
+      data.coApplicantEmail,
+      data.coApplicantPhone,
+      data.coApplicantLocation,
+      data.coApplicantIncome,
       folderData.data.webViewLink
     ];
 
     // Append to Google Sheets
     await appendToSheet(sheetData);
-    uploadProgress.steps[3].status = 'completed';
-
-    // Update progress to show email sending
-    uploadProgress.status = 'processing';
-    uploadProgress.currentStep = 'Sending Confirmation Email';
-    uploadProgress.currentFile = '';
-
-    try {
-      // After successful submission and before returning response
-      await sendLoanApplicationEmail({
-        name: applicantName,
-        email: applicantEmail,
-        phone: applicantPhone,
-        location: applicantLocation,
-        loanAmount,
-        loanType,
-        message: formData.get('message') as string,
-        googleDriveLink: folderData.data.webViewLink,
-        applicationId: applicationNumber,
-      });
-
-      uploadProgress.status = 'completed';
-      uploadProgress.percentage = 100;
-      logPerformance('Total request processing time', totalStartTime);
-
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Loan application submitted successfully',
-        applicationNumber,
-        applicantFolderId
-      });
-    } catch (error) {
-      console.error('Error sending email:', error);
-      // Even if email fails, we still want to return success since the application was submitted
-      uploadProgress.status = 'completed';
-      uploadProgress.percentage = 100;
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Loan application submitted successfully (Email notification failed)',
-        applicationNumber,
-        applicantFolderId
-      });
-    }
 
   } catch (error) {
-    console.error('Error in loan submission:', error);
-    uploadProgress.status = 'completed';
-    return NextResponse.json(
-      { success: false, message: 'Failed to submit loan application' },
-      { status: 500 }
-    );
+    console.error('Error in async Google Drive upload process:', error);
+    // Log the error but don't throw since this is async
   }
 }
 
 // Helper function to move a file to a new folder
-async function moveFileToFolder(fileWebViewLink: string, targetFolderId: string) {
+async function moveFileToFolder(blobUrl: string, fileName: string, folderId: string): Promise<void> {
+  const startTime = performance.now();
   try {
-    // Extract file ID from webViewLink
-    const fileId = fileWebViewLink.split('/')[5];
-    
-    // Get current parents
-    const file = await drive.files.get({
-      fileId: fileId,
-      fields: 'parents',
+    // Extract the blob ID from the URL
+    const blobId = blobUrl.split('/').pop();
+    if (!blobId) {
+      throw new Error('Invalid blob URL');
+    }
+
+    // Download the file from Vercel Blob
+    const response = await fetch(blobUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download file from Blob: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    const buffer = Buffer.from(await blob.arrayBuffer());
+
+    // Upload to Google Drive
+    const fileMetadata = {
+      name: `${fileName}`,
+      parents: [folderId],
+    };
+
+    const media = {
+      mimeType: blob.type || 'application/octet-stream',
+      body: Readable.from(buffer),
+    };
+
+    const file = await drive.files.create({
+      requestBody: fileMetadata,
+      media: media,
+      fields: 'id, name, webViewLink',
     });
 
-    // Move file to new folder
-    await drive.files.update({
-      fileId: fileId,
-      addParents: targetFolderId,
-      removeParents: file.data.parents?.join(','),
-      fields: 'id, parents',
-    });
+    if (!file.data.id) {
+      throw new Error('Failed to upload file to Google Drive');
+    }
+
+    logPerformance('File upload to Google Drive', startTime);
   } catch (error) {
-    console.error('Error moving file:', error);
+    logPerformance('File upload to Google Drive (failed)', startTime);
     throw error;
   }
 }
