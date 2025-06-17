@@ -37,7 +37,7 @@ export async function sendLoanApplicationEmail({
     // Send to applicant (using verified email for testing)
     const result = await resend.emails.send({
       from: 'Money Solution Point <onboarding@resend.dev>',
-      to: 'somshich@gmail.com', // Using verified email for testing
+      to: 'srishtiagarwal411@gmail.com', // Using verified email for testing
       subject: `Loan Application Submitted - ${applicationId}`,
       react: EmailTemplate({
         name,

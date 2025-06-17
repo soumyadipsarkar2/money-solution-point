@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     try {
       const result = await resend.emails.send({
         from: 'Money Solution Point <onboarding@resend.dev>',
-        to: 'somshich@gmail.com',
+        to: 'srishtiagarwal411@gmail.com',
         subject: `New Loan Inquiry from ${name}`,
         react: CTAEmailTemplate({
           name,
