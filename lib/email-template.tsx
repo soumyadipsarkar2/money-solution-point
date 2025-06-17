@@ -10,6 +10,7 @@ interface EmailTemplateProps {
   message?: string
   googleDriveLink: string
   applicationId: string
+  googleSheetLink: string
 }
 
 export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
@@ -22,6 +23,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
   message,
   googleDriveLink,
   applicationId,
+  googleSheetLink,
 }) => (
   <div style={{
     fontFamily: 'Arial, sans-serif',
@@ -263,7 +265,7 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
           <div style={{
             width: '24px',
             height: '24px',
-            backgroundColor: '#7c2d12',
+            backgroundColor: '#0369a1',
             borderRadius: '50%',
             marginRight: '12px',
             display: 'flex',
@@ -278,28 +280,46 @@ export const EmailTemplate: React.FC<Readonly<EmailTemplateProps>> = ({
               <polyline points="10 9 9 9 8 9"/>
             </svg>
           </div>
-          Application Documents
+          Application Links
         </h2>
         
         <div style={{ display: 'grid', gap: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: '600', color: '#374151' }}>Documents Link:</span>
-            <a 
-              href={googleDriveLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: '#2563eb',
-                textDecoration: 'none',
-                padding: '8px 16px',
-                backgroundColor: '#eff6ff',
-                borderRadius: '8px',
-                border: '1px solid #bfdbfe',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-            >
+            <span style={{ fontWeight: '600', color: '#374151' }}>Documents:</span>
+            <a href={googleDriveLink} style={{
+              color: '#2563eb',
+              textDecoration: 'none',
+              fontWeight: '500',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
               View Documents
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          </div>
+          <div style={{ height: '1px', backgroundColor: '#e5e7eb' }}></div>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: '600', color: '#374151' }}>Application Details:</span>
+            <a href={googleSheetLink} style={{
+              color: '#2563eb',
+              textDecoration: 'none',
+              fontWeight: '500',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}>
+              View Application
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
             </a>
           </div>
         </div>

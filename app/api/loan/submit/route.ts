@@ -440,6 +440,7 @@ async function processGoogleDriveUpload(data: {
     // Prepare data for Google Sheets
     const sheetData = [
       new Date().toISOString(),
+      data.applicationNumber,
       data.applicantName,
       data.applicantEmail,
       data.applicantPhone,
@@ -458,7 +459,7 @@ async function processGoogleDriveUpload(data: {
     // Append to Google Sheets
     await appendToSheet(sheetData);
 
-    // Send email immediately after folder creation
+    // Send email notification
     await sendLoanApplicationEmail({
       name: data.applicantName,
       email: data.applicantEmail,
@@ -466,14 +467,14 @@ async function processGoogleDriveUpload(data: {
       location: data.applicantLocation,
       loanAmount: data.loanAmount,
       loanType: data.loanType,
-      message: '',
       googleDriveLink: folderData.data.webViewLink,
       applicationId: data.applicationNumber,
+      googleSheetLink: `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit#gid=0`
     });
 
   } catch (error) {
-    console.error('Error in async Google Drive upload process:', error);
-    // Log the error but don't throw since this is async
+    console.error('❌ Error processing upload:', error);
+    throw error;
   }
 }
 

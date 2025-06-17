@@ -15,6 +15,7 @@ export async function sendLoanApplicationEmail({
   message,
   googleDriveLink,
   applicationId,
+  googleSheetLink,
 }: {
   name: string;
   email: string;
@@ -25,6 +26,7 @@ export async function sendLoanApplicationEmail({
   message?: string;
   googleDriveLink: string;
   applicationId: string;
+  googleSheetLink: string;
 }) {
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -49,6 +51,7 @@ export async function sendLoanApplicationEmail({
         message,
         googleDriveLink,
         applicationId,
+        googleSheetLink,
       }) as ReactElement,
     });
 
@@ -69,6 +72,7 @@ export async function sendLoanApplicationEmail({
     //     message,
     //     googleDriveLink,
     //     applicationId,
+    //     googleSheetLink,
     //   }) as ReactElement,
     // });
 
