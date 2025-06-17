@@ -85,48 +85,40 @@ const documentTypes: DocumentType[] = [
     key: "aadhaar",
     label: "Aadhaar Card",
     hindiLabel: "आधार कार्ड",
-    required: false,
+    required: true,
     name: "Aadhaar Card"
   },
   {
     id: "photos",
     key: "photos",
-    label: "Photographs",
-    hindiLabel: "फोटो",
+    label: "Photographs (4)",
+    hindiLabel: "फोटोग्राफ (4)",
     required: false,
     name: "Photographs"
   },
   {
     id: "bank_statement",
     key: "bank_statement",
-    label: "Bank Statement",
-    hindiLabel: "बैंक स्टेटमेंट",
+    label: "Bank Statement (1 Year)",
+    hindiLabel: "बैंक स्टेटमेंट (1 वर्ष)",
     required: false,
     name: "Bank Statement"
   },
   {
     id: "itr",
     key: "itr",
-    label: "ITR",
-    hindiLabel: "आईटीआर",
+    label: "Income Tax Returns (3 Years)",
+    hindiLabel: "आयकर रिटर्न (3 वर्ष)",
     required: false,
     name: "ITR"
   },
   {
     id: "gst",
     key: "gst",
-    label: "GST Returns",
-    hindiLabel: "जीएसटी रिटर्न",
+    label: "GST Returns (if applicable)",
+    hindiLabel: "जीएसटी रिटर्न (यदि लागू हो)",
     required: false,
     name: "GST Returns"
-  },
-  {
-    id: "loan_history",
-    key: "loan_history",
-    label: "Loan History",
-    hindiLabel: "लोन इतिहास",
-    required: false,
-    name: "Loan History"
   },
   {
     id: "property_docs",
@@ -137,10 +129,18 @@ const documentTypes: DocumentType[] = [
     name: "Property Documents"
   },
   {
+    id: "loan_history",
+    key: "loan_history",
+    label: "Loan History (1 Year)",
+    hindiLabel: "ऋण इतिहास (1 वर्ष)",
+    required: false,
+    name: "Loan History"
+  },
+  {
     id: "property_photos_and_videos",
     key: "property_photos_and_videos",
     label: "Property Photos and Videos",
-    hindiLabel: "संपत्ति फोटो और वीडियो",
+    hindiLabel: "संपत्ति फोटो/वीडियो",
     required: false,
     name: "Property Photos and Videos"
   },
@@ -166,16 +166,16 @@ const coApplicantDocTypes: DocumentType[] = [
   {
     id: "co_aadhaar",
     key: "co_aadhaar",
-    label: "Aadhaar Card",
+    label: "Aadhar Card",
     hindiLabel: "आधार कार्ड",
-    required: false,
+    required: true,
     name: "Aadhaar Card"
   },
   {
     id: "co_photos",
     key: "co_photos",
-    label: "Photographs",
-    hindiLabel: "फोटो",
+    label: "Photographs (4)",
+    hindiLabel: "फोटोग्राफ (4)",
     required: false,
     name: "Photographs"
   },
