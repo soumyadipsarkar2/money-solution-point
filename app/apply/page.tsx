@@ -13,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Check, FileText, User, UserPlus, AlertCircle } from "lucide-react"
 import MultiFileUpload from "@/components/multi-file-upload"
+import StepProgress from "@/components/StepProgress"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import UploadProgress from "@/app/components/UploadProgress"
 import { upload } from '@vercel/blob/client'
 import { useRouter } from "next/navigation"
 
@@ -212,25 +212,6 @@ interface DocNames {
   [key: string]: string;
 }
 
-interface UploadProgress {
-  totalFiles: number;
-  uploadedFiles: number;
-  currentFile: string;
-  currentStep: string;
-  status: 'preparing' | 'uploading' | 'processing' | 'completed' | 'error';
-  percentage: number;
-  steps: {
-    name: string;
-    status: 'pending' | 'in-progress' | 'completed' | 'error';
-    files: {
-      name: string;
-      folder?: string;
-      isProcessing?: boolean;
-    }[];
-    error?: string;
-  }[];
-}
-
 export default function ApplyPage() {
   const searchParams = useSearchParams()
   const loanTypeFromUrl = searchParams.get("type")
@@ -265,9 +246,30 @@ export default function ApplyPage() {
   const [isFormComplete, setIsFormComplete] = useState(false)
   const [applicationNumber, setApplicationNumber] = useState<string>("")
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [showProgress, setShowProgress] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string>('')
+
+  // Step progress tracking state
+  const [showStepProgress, setShowStepProgress] = useState(false)
+  const [currentStep, setCurrentStep] = useState<'folders' | 'applicant' | 'co-applicant' | 'completed'>('folders')
+  const [folderStatus, setFolderStatus] = useState<'pending' | 'creating' | 'completed' | 'error'>('pending')
+  const [applicantDocs, setApplicantDocs] = useState<Array<{
+    docId: string;
+    docName: string;
+    files: Array<{
+      fileName: string;
+      status: 'pending' | 'uploading' | 'completed' | 'error';
+    }>;
+  }>>([])
+  const [coApplicantDocs, setCoApplicantDocs] = useState<Array<{
+    docId: string;
+    docName: string;
+    files: Array<{
+      fileName: string;
+      status: 'pending' | 'uploading' | 'completed' | 'error';
+    }>;
+  }>>([])
+  const [currentUploadingFile, setCurrentUploadingFile] = useState<string>('')
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -287,123 +289,184 @@ export default function ApplyPage() {
     }
   };
   
-  const uploadFilesToVercelBlob = async (files: Record<string, File[]>, isCoApplicant = false) => {
+  const uploadFilesWithProgress = async (files: Record<string, File[]>, folderStructure: any, isCoApplicant = false) => {
     const uploadedFiles: Record<string, { name: string; webViewLink: string }[]> = {};
+    const docTypes = isCoApplicant ? coApplicantDocTypes : documentTypes;
     
-    // Initialize upload progress
-    const totalFiles = Object.values(files).reduce((acc, curr) => acc + curr.length, 0);
-    setUploadProgress({
-      totalFiles,
-      uploadedFiles: 0,
-      currentFile: '',
-      currentStep: 'Uploading Files',
-      status: 'uploading',
-      percentage: 0,
-      steps: [
-        {
-          name: 'Uploading Files',
-          status: 'in-progress',
-          files: []
-        }
-      ]
-    });
+    // Initialize document progress tracking
+    const docsToTrack: Array<{
+      docId: string;
+      docName: string;
+      files: Array<{
+        fileName: string;
+        status: 'pending' | 'uploading' | 'completed' | 'error';
+      }>;
+    }> = [];
     
     for (const [docId, fileList] of Object.entries(files)) {
       if (fileList.length === 0) continue;
       
-      const doc = isCoApplicant 
-        ? coApplicantDocTypes.find(d => d.id === docId)
-        : documentTypes.find(d => d.id === docId);
-        
+      const doc = docTypes.find(d => d.id === docId);
+      if (!doc) continue;
+      
+      docsToTrack.push({
+        docId,
+        docName: doc.label,
+        files: fileList.map(file => ({
+          fileName: file.name,
+          status: 'pending' as const
+        }))
+      });
+    }
+    
+    // Update progress state
+    if (isCoApplicant) {
+      setCoApplicantDocs(docsToTrack);
+    } else {
+      setApplicantDocs(docsToTrack);
+    }
+    
+    for (const [docId, fileList] of Object.entries(files)) {
+      if (fileList.length === 0) continue;
+      
+      const doc = docTypes.find(d => d.id === docId);
       if (!doc) continue;
       
       uploadedFiles[docId] = [];
+      
+      // Determine the correct folder ID
+      let targetFolderId: string;
+      if (isCoApplicant) {
+        if (fileList.length > 1) {
+          targetFolderId = folderStructure.coApplicantSubfolders[docId];
+        } else {
+          targetFolderId = folderStructure.coApplicantFolderId;
+        }
+      } else {
+        if (fileList.length > 1 || doc.key === 'property_photos_and_videos') {
+          targetFolderId = folderStructure.applicantSubfolders[docId];
+        } else {
+          targetFolderId = folderStructure.applicantFolderId;
+        }
+      }
       
       for (const file of fileList) {
         try {
           console.log(`Starting upload for ${file.name} (${file.type})`);
           
-          // Update progress for current file
-          setUploadProgress(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              currentFile: file.name,
-              uploadedFiles: prev.uploadedFiles + 1,
-              percentage: Math.round(((prev.uploadedFiles + 1) / prev.totalFiles) * 100),
-              steps: prev.steps.map(step => {
-                if (step.name === 'Uploading Files') {
-                  return {
-                    ...step,
-                    files: [...step.files, { name: file.name, isProcessing: true }]
-                  };
-                }
-                return step;
-              })
-            };
+          // Update current uploading file
+          setCurrentUploadingFile(file.name);
+          
+          // Update file status to uploading
+          if (isCoApplicant) {
+            setCoApplicantDocs(prev => prev.map(doc => ({
+              ...doc,
+              files: doc.files.map(f => 
+                f.fileName === file.name ? { ...f, status: 'uploading' as const } : f
+              )
+            })));
+          } else {
+            setApplicantDocs(prev => prev.map(doc => ({
+              ...doc,
+              files: doc.files.map(f => 
+                f.fileName === file.name ? { ...f, status: 'uploading' as const } : f
+              )
+            })));
+          }
+          
+          const formData = new FormData();
+          formData.append('fileName', `${doc.name}-${file.name}`);
+          formData.append('folderId', targetFolderId);
+          formData.append('docType', docId);
+          formData.append('isCoApplicant', isCoApplicant.toString());
+          formData.append('sessionId', sessionId);
+          
+          const fileSize = file.size;
+          const FILE_SIZE_LIMIT = 4 * 1024 * 1024; // 4MB
+          
+          if (fileSize <= FILE_SIZE_LIMIT) {
+            // Direct upload to Google Drive (file ≤4MB)
+            console.log(`📁 Uploading ${file.name} (${(fileSize / 1024 / 1024).toFixed(2)}MB) directly to Google Drive`);
+            formData.append('uploadType', 'direct');
+            formData.append('file', file);
+          } else {
+            // Upload to Vercel Blob first, then to Google Drive (file >4MB)
+            console.log(`📁 Uploading ${file.name} (${(fileSize / 1024 / 1024).toFixed(2)}MB) to Vercel Blob first`);
+            
+            // Upload to Vercel Blob using client SDK
+            const blob = await upload(`${doc.name}-${file.name}`, file, {
+              access: 'public',
+              handleUploadUrl: '/api/blob/upload',
+            });
+            
+            formData.append('uploadType', 'blob');
+            formData.append('blobUrl', blob.url);
+            formData.append('mimeType', file.type);
+          }
+          
+          const response = await fetch('/api/loan/upload-files', {
+            method: 'POST',
+            body: formData,
           });
           
-          // Upload directly to Vercel Blob using the client SDK
-          const blob = await upload(`${doc.name}-${file.name}`, file, {
-            access: 'public',
-            handleUploadUrl: '/api/blob/upload',
-          });
-
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to upload file');
+          }
+          
+          const result = await response.json();
+          
           uploadedFiles[docId].push({
-            name: `${doc.name}-${file.name}`,
-            webViewLink: blob.url
+            name: result.fileName,
+            webViewLink: result.webViewLink
           });
-
-          // Update progress after successful upload
-          setUploadProgress(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              steps: prev.steps.map(step => {
-                if (step.name === 'Uploading Files') {
-                  return {
-                    ...step,
-                    files: step.files.map(f => 
-                      f.name === file.name ? { ...f, isProcessing: false } : f
-                    )
-                  };
-                }
-                return step;
-              })
-            };
-          });
-
+          
+          // Update file status to completed
+          if (isCoApplicant) {
+            setCoApplicantDocs(prev => prev.map(doc => ({
+              ...doc,
+              files: doc.files.map(f => 
+                f.fileName === file.name ? { ...f, status: 'completed' as const } : f
+              )
+            })));
+          } else {
+            setApplicantDocs(prev => prev.map(doc => ({
+              ...doc,
+              files: doc.files.map(f => 
+                f.fileName === file.name ? { ...f, status: 'completed' as const } : f
+              )
+            })));
+          }
+          
+          console.log(`Uploaded ${file.name} successfully`);
+          
         } catch (error) {
           console.error('Error uploading file:', error);
-          setUploadProgress(prev => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              status: 'error',
-              steps: prev.steps.map(step => ({
-                ...step,
-                status: 'error',
-                error: `Failed to upload ${file.name}`
-              }))
-            };
-          });
+          
+          // Update file status to error
+          if (isCoApplicant) {
+            setCoApplicantDocs(prev => prev.map(doc => ({
+              ...doc,
+              files: doc.files.map(f => 
+                f.fileName === file.name ? { ...f, status: 'error' as const } : f
+              )
+            })));
+          } else {
+            setApplicantDocs(prev => prev.map(doc => ({
+              ...doc,
+              files: doc.files.map(f => 
+                f.fileName === file.name ? { ...f, status: 'error' as const } : f
+              )
+            })));
+          }
+          
           throw error;
         }
       }
     }
 
-    setUploadProgress(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        status: 'completed',
-        percentage: 100,
-        steps: prev.steps.map(step => ({
-          ...step,
-          status: 'completed'
-        }))
-      };
-    });
+    // Clear current uploading file
+    setCurrentUploadingFile('');
 
     return uploadedFiles;
   };
@@ -658,14 +721,76 @@ export default function ApplyPage() {
     setShowConfirmDialog(false)
     setIsSubmitting(true)
     setError(null)
-    setShowProgress(true)
     setUploadError(null)
 
+    // Show step progress
+    setShowStepProgress(true)
+    setCurrentStep('folders')
+    setFolderStatus('creating')
+
+    // Generate session ID for progress tracking
+    const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setSessionId(newSessionId);
+    console.log('Generated session ID:', newSessionId);
+
     try {
-      // First upload all files and get their metadata
-      const applicantFileMetadata = await uploadFilesToVercelBlob(documents)
-      const coApplicantFileMetadata = await uploadFilesToVercelBlob(coApplicantDocuments, true)
+      // Step 1: Create folders first
+      const formDataForFolders = new FormData()
       
+      // Append form data
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value) {
+          formDataForFolders.append(key, value)
+        }
+      })
+
+      // Create file metadata for folder creation (just the structure, not the actual files)
+      const folderApplicantMetadata = Object.fromEntries(
+        Object.entries(documents).map(([docId, files]) => [docId, files.map(f => ({ name: f.name }))])
+      );
+      const folderCoApplicantMetadata = Object.fromEntries(
+        Object.entries(coApplicantDocuments).map(([docId, files]) => [docId, files.map(f => ({ name: f.name }))])
+      );
+
+      formDataForFolders.append('applicantFileMetadata', JSON.stringify(folderApplicantMetadata))
+      formDataForFolders.append('coApplicantFileMetadata', JSON.stringify(folderCoApplicantMetadata))
+
+      const folderResponse = await fetch('/api/loan/create-folders', {
+        method: 'POST',
+        body: formDataForFolders,
+      })
+
+      if (!folderResponse.ok) {
+        const errorData = await folderResponse.json();
+        throw new Error(errorData.message || 'Failed to create folders')
+      }
+
+      const folderData = await folderResponse.json()
+      const folderStructure = folderData.folderStructure
+
+      // Mark folder creation as completed
+      setFolderStatus('completed')
+
+      // Initialize file metadata variables
+      let finalApplicantFileMetadata: Record<string, { name: string; webViewLink: string }[]> = {}
+      let finalCoApplicantFileMetadata: Record<string, { name: string; webViewLink: string }[]> = {}
+
+      // Step 2: Upload applicant files
+      if (Object.keys(documents).length > 0) {
+        setCurrentStep('applicant')
+        finalApplicantFileMetadata = await uploadFilesWithProgress(documents, folderStructure, false)
+      }
+
+      // Step 3: Upload co-applicant files
+      if (Object.keys(coApplicantDocuments).length > 0) {
+        setCurrentStep('co-applicant')
+        finalCoApplicantFileMetadata = await uploadFilesWithProgress(coApplicantDocuments, folderStructure, true)
+      }
+      
+      // Mark as completed
+      setCurrentStep('completed')
+      
+      // Step 4: Submit final application data
       const formDataToSubmit = new FormData()
       
       // Append form data
@@ -675,27 +800,11 @@ export default function ApplyPage() {
         }
       })
 
-      // Append file metadata
-      formDataToSubmit.append('applicantFileMetadata', JSON.stringify(applicantFileMetadata))
-      formDataToSubmit.append('coApplicantFileMetadata', JSON.stringify(coApplicantFileMetadata))
-
-      // Update progress to show Google Drive upload
-      setUploadProgress(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          currentStep: 'Uploading to Google Drive',
-          status: 'uploading',
-          steps: [
-            ...prev.steps,
-            {
-              name: 'Uploading to Google Drive',
-              status: 'in-progress',
-              files: []
-            }
-          ]
-        };
-      });
+      // Append file metadata and folder structure
+      formDataToSubmit.append('applicantFileMetadata', JSON.stringify(finalApplicantFileMetadata))
+      formDataToSubmit.append('coApplicantFileMetadata', JSON.stringify(finalCoApplicantFileMetadata))
+      formDataToSubmit.append('folderStructure', JSON.stringify(folderStructure))
+      formDataToSubmit.append('applicationNumber', folderData.applicationNumber)
 
       const response = await fetch('/api/loan/submit', {
         method: 'POST',
@@ -708,41 +817,14 @@ export default function ApplyPage() {
         throw new Error(data.message || 'Failed to submit application')
       }
 
-      // Update progress to show Google Drive upload completed
-      setUploadProgress(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          status: 'completed',
-          percentage: 100,
-          steps: prev.steps.map(step => ({
-            ...step,
-            status: 'completed'
-          }))
-        };
-      });
-
       // Only set success state after Google Drive upload is complete
-      setApplicationNumber(data.applicationNumber)
+      setApplicationNumber(folderData.applicationNumber)
       setIsSuccess(true)
-      setShowProgress(false)
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to submit application'
       setError(errorMessage)
-      setShowProgress(false)
-      setUploadProgress(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          status: 'error',
-          steps: prev.steps.map(step => ({
-            ...step,
-            status: 'error',
-            error: errorMessage
-          }))
-        };
-      });
+      setFolderStatus('error')
       toast({
         title: "Submission Error",
         description: errorMessage,
@@ -750,6 +832,10 @@ export default function ApplyPage() {
       })
     } finally {
       setIsSubmitting(false)
+      // Hide step progress after a delay to show completion
+      setTimeout(() => {
+        setShowStepProgress(false)
+      }, 2000)
     }
   }
 
@@ -763,7 +849,7 @@ export default function ApplyPage() {
 
   if (isSuccess) {
     return (
-      <div className="container px-4 md:px-6 py-12 md:py-24 lg:py-32 flex items-center justify-center">
+      <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
         <Card className="w-full max-w-2xl border-0 shadow-lg">
           <CardHeader className="text-center">
             <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
@@ -797,14 +883,14 @@ export default function ApplyPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {isSubmitting && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            <p className="text-lg font-medium">Submitting your application...</p>
-          </div>
-        </div>
-      )}
+      <StepProgress 
+        isVisible={showStepProgress}
+        currentStep={currentStep}
+        folderStatus={folderStatus}
+        applicantDocs={applicantDocs}
+        coApplicantDocs={coApplicantDocs}
+        currentUploadingFile={currentUploadingFile}
+      />
       
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent>
@@ -1233,7 +1319,6 @@ export default function ApplyPage() {
         </div>
       </div>
       
-      {showProgress && <UploadProgress progress={uploadProgress} error={uploadError} />}
     </div>
   )
 }
